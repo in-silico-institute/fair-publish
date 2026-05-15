@@ -9,7 +9,9 @@ and CLI output are readable even for DMPs with many datasets.
 """
 
 from __future__ import annotations
+import contextlib
 import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -107,8 +109,11 @@ class ValidationReport:
 
 def _load_dmp(dmp_path: Path):
     """Load and structurally validate a maDMP via madmpy."""
-    madmpy.validate_DMP(str(dmp_path))          # raises on schema error
-    dmp_module = madmpy.load()
+    # madmpy prints progress lines to stdout; redirect them to stderr so they
+    # don't corrupt JSON output when the caller pipes our stdout.
+    with contextlib.redirect_stdout(sys.stderr):
+        madmpy.validate_DMP(str(dmp_path))      # raises on schema error
+        dmp_module = madmpy.load()
     with dmp_path.open() as f:
         data = json.load(f)
     return dmp_module.DMP(**data["dmp"])
