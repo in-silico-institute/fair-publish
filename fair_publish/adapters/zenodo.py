@@ -131,6 +131,22 @@ class ZenodoAdapter:
         return {"Authorization": f"Bearer {self.token}",
                 "Content-Type": "application/json"}
 
+    def _upload_placeholder(self, dep_id: int) -> None:
+        """Upload a minimal placeholder file so Zenodo can publish."""
+        content = (
+            "This record was published via the fair-publish pipeline.\n"
+            "It contains metadata only — actual data files are managed separately.\n"
+        ).encode()
+        headers = {"Authorization": f"Bearer {self.token}"}
+        resp = requests.post(
+            f"{self.base}/deposit/depositions/{dep_id}/files",
+            headers=headers,
+            data={"name": "README.txt"},
+            files={"file": ("README.txt", content, "text/plain")},
+            timeout=30,
+        )
+        resp.raise_for_status()
+
     def _create(self, metadata: dict) -> dict:
         resp = requests.post(f"{self.base}/deposit/depositions",
                              json={}, headers=self._headers(), timeout=30)
@@ -141,6 +157,8 @@ class ZenodoAdapter:
                             json={"metadata": metadata},
                             headers=self._headers(), timeout=30)
         resp.raise_for_status()
+
+        self._upload_placeholder(dep_id)
 
         resp = requests.post(
             f"{self.base}/deposit/depositions/{dep_id}/actions/publish",
