@@ -52,6 +52,16 @@ def _result(rule_name: str, severity: str, fair: str,
 # Built-in FAIR rules
 # ---------------------------------------------------------------------------
 
+def _type_str(obj: Any) -> str:
+    """Extract the type string from a madmpy enum or plain string.
+
+    madmpy returns constrained enum values like 'pidscheme.orcid' or
+    'dataaccess.open'.  We normalise by taking the last dot-segment.
+    """
+    raw = str(getattr(obj, "type", "") or "").lower().strip()
+    return raw.split(".")[-1] if "." in raw else raw
+
+
 class OrcidPresent:
     """At least the DMP contact must have an ORCID identifier."""
     name = "Creator ORCID present"
@@ -63,14 +73,14 @@ class OrcidPresent:
         cid = getattr(contact, "contact_id", None)
         has_orcid = (
             cid is not None
-            and str(getattr(cid, "type", "")).lower() == "orcid"
+            and _type_str(cid) == "orcid"
             and bool(getattr(cid, "identifier", ""))
         )
         # Also accept any contributor with ORCID
         if not has_orcid:
             for contrib in getattr(dmp, "contributor", []) or []:
                 cid2 = getattr(contrib, "contributor_id", None)
-                if cid2 and str(getattr(cid2, "type", "")).lower() == "orcid":
+                if cid2 and _type_str(cid2) == "orcid":
                     has_orcid = True
                     break
         return _result(self.name, self.severity, self.fair,
@@ -85,11 +95,25 @@ class LicenseRecognized:
     severity = "error"
     fair = "R1.1"
 
-    _KNOWN = {
+    # SPDX identifiers (lowercase)
+    _SPDX = {
         "cc-by-4.0", "cc-by-sa-4.0", "cc-by-nc-4.0", "cc0-1.0",
         "mit", "apache-2.0", "gpl-2.0", "gpl-3.0", "lgpl-2.1",
         "bsd-2-clause", "bsd-3-clause", "eupl-1.2",
     }
+    # URL substrings that unambiguously identify an open license
+    _URL_FRAGMENTS = {
+        "creativecommons.org/licenses/",
+        "creativecommons.org/publicdomain/",
+        "opensource.org/licenses/",
+        "spdx.org/licenses/",
+    }
+
+    def _recognized(self, ref: str) -> bool:
+        return (
+            any(k in ref for k in self._SPDX)
+            or any(u in ref for u in self._URL_FRAGMENTS)
+        )
 
     def __call__(self, dmp: Any, dataset: Any) -> RuleResult:
         distributions = getattr(dataset, "distribution", None) or []
@@ -99,9 +123,7 @@ class LicenseRecognized:
                 ref = str(getattr(lic, "license_ref", "") or "").lower()
                 if ref:
                     refs.append(ref)
-        recognized = any(
-            any(k in ref for k in self._KNOWN) for ref in refs
-        )
+        recognized = any(self._recognized(ref) for ref in refs)
         passed = bool(refs) and recognized
         msg = ("No license_ref found in any distribution."
                if not refs else
@@ -154,11 +176,13 @@ class AccessRightsStated:
                            "dataset.distribution", False,
                            "No distribution found; cannot check access rights.")
         for dist in distributions:
-            ar = str(getattr(dist, "data_access", "") or "").strip().lower()
+            raw = str(getattr(dist, "data_access", "") or "").strip().lower()
+            # madmpy may return enum format like "dataaccess.open"
+            ar = raw.split(".")[-1] if "." in raw else raw
             if ar not in self._VALID:
                 return _result(self.name, self.severity, self.fair,
                                "dataset.distribution[].data_access", False,
-                               f"data_access '{ar}' must be one of {self._VALID}.")
+                               f"data_access '{raw}' (→'{ar}') must be one of {self._VALID}.")
         return _result(self.name, self.severity, self.fair,
                        "dataset.distribution[].data_access", True)
 
