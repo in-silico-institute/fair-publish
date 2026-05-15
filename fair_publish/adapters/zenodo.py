@@ -230,16 +230,10 @@ class ZenodoAdapter:
                 result = self._create_draft(metadata)
                 action = "draft created"
 
-<<<<<<< HEAD
-            concept_doi = result.get("conceptdoi") or result.get("doi", "")
-            updated_state[key] = concept_doi
-            print(f"  [{action}] {metadata['title']} → {concept_doi}", file=sys.stderr)
-=======
             record_id = result["id"]
             doi = result.get("doi", "(reserved after publish)")
             updated_state[key] = record_id
             print(f"  [{action}] {metadata['title']} → id={record_id} doi={doi}",
                   file=sys.stderr)
->>>>>>> c86c3f1 (Draft-mode Zenodo publishing, rule fixes, updated slides)
 
         return updated_state
