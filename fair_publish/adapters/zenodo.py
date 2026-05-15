@@ -112,13 +112,25 @@ def _dataset_to_zenodo_metadata(dmp: Any, dataset: Any, version_tag: str) -> dic
     if license_id:
         meta["license"] = license_id
 
+    # Zenodo only accepts specific schemes for related identifiers; "other" is not valid.
+    # Auto-detect URL/DOI from the identifier itself if the maDMP type is generic.
+    _ZENODO_SCHEMES = {"ark", "arxiv", "doi", "handle", "isbn", "issn",
+                       "pmid", "purl", "url", "urn", "w3id"}
     dmp_id = getattr(dmp, "dmp_id", None)
     dmp_identifier = str(getattr(dmp_id, "identifier", "") or "")
-    if dmp_identifier:
+    scheme = str(getattr(dmp_id, "type", "") or "").lower().split(".")[-1]
+    if scheme not in _ZENODO_SCHEMES:
+        if dmp_identifier.startswith("http"):
+            scheme = "url"
+        elif dmp_identifier.startswith("10."):
+            scheme = "doi"
+        else:
+            scheme = ""
+    if dmp_identifier and scheme:
         meta["related_identifiers"] = [{
             "identifier": dmp_identifier,
             "relation": "isDocumentedBy",
-            "scheme": str(getattr(dmp_id, "type", "url")),
+            "scheme": scheme,
         }]
 
     return meta
