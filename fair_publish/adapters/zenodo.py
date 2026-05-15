@@ -19,6 +19,7 @@ Field mapping (RDA maDMP → Zenodo metadata):
 from __future__ import annotations
 import os
 import re
+import sys
 from typing import Any
 
 import requests
@@ -26,7 +27,14 @@ import requests
 ZENODO_API = "https://zenodo.org/api"
 ZENODO_SANDBOX_API = "https://sandbox.zenodo.org/api"
 
-_SPDX_TAIL = re.compile(r"https?://.*?/([^/]+?)/?$")
+# Zenodo expects SPDX IDs; CC URLs need remapping
+_CC_URL_TO_SPDX = {
+    "by/4.0": "CC-BY-4.0",
+    "by-sa/4.0": "CC-BY-SA-4.0",
+    "by-nc/4.0": "CC-BY-NC-4.0",
+    "publicdomain/zero/1.0": "CC0-1.0",
+    "zero/1.0": "CC0-1.0",
+}
 _ACCESS_MAP = {"open": "open", "shared": "restricted", "closed": "closed"}
 
 
@@ -34,15 +42,31 @@ _ACCESS_MAP = {"open": "open", "shared": "restricted", "closed": "closed"}
 # Metadata mapping
 # ---------------------------------------------------------------------------
 
+def _enum_tail(value: Any) -> str:
+    """Normalize madmpy enum strings like 'dataaccess.open' → 'open'."""
+    s = str(value or "").lower().strip()
+    return s.split(".")[-1] if "." in s else s
+
+
 def _license_id(license_ref: str) -> str:
-    m = _SPDX_TAIL.match(license_ref)
-    return (m.group(1) if m else license_ref).lower()
+    """Map a license_ref (URL or SPDX id) to a Zenodo-recognized SPDX id."""
+    ref = license_ref.lower()
+    for fragment, spdx in _CC_URL_TO_SPDX.items():
+        if fragment in ref:
+            return spdx
+    # Try extracting the SPDX id from a spdx.org URL or plain string
+    m = re.search(r"spdx\.org/licenses/([^/\s]+)", ref, re.I)
+    if m:
+        return m.group(1).rstrip("/")
+    # Last segment of a URL as fallback
+    m2 = re.search(r"/([^/\s]+?)/?$", ref)
+    return (m2.group(1) if m2 else license_ref).lower()
 
 
 def _build_creator(person: Any) -> dict:
     entry: dict = {"name": getattr(person, "name", "Unknown")}
     cid = getattr(person, "contact_id", None) or getattr(person, "contributor_id", None)
-    if cid and str(getattr(cid, "type", "")).lower() == "orcid":
+    if cid and "orcid" in _enum_tail(getattr(cid, "type", "")):
         entry["orcid"] = str(getattr(cid, "identifier", ""))
     affiliation = str(getattr(person, "affiliation", "") or "")
     if affiliation:
@@ -66,7 +90,7 @@ def _dataset_to_zenodo_metadata(dmp: Any, dataset: Any, version_tag: str) -> dic
     licenses = getattr(dist, "license", None) or [] if dist else []
     license_id = (_license_id(str(getattr(licenses[0], "license_ref", "") or ""))
                   if licenses else "")
-    data_access = str(getattr(dist, "data_access", "open") or "open").lower() if dist else "open"
+    data_access = _enum_tail(getattr(dist, "data_access", "open") or "open") if dist else "open"
 
     meta: dict = {
         "upload_type": "dataset",
@@ -179,6 +203,6 @@ class ZenodoAdapter:
 
             concept_doi = result.get("conceptdoi") or result.get("doi", "")
             updated_state[key] = concept_doi
-            print(f"  [{action}] {metadata['title']} → {concept_doi}")
+            print(f"  [{action}] {metadata['title']} → {concept_doi}", file=sys.stderr)
 
         return updated_state
