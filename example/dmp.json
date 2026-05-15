@@ -4,6 +4,7 @@
     "description": "Anonymised measurements of 12 metabolic markers across 400 participants over 5 years.",
     "created": "2025-01-15",
     "modified": "2025-06-01",
+    "language": "eng",
     "dmp_id": {
       "identifier": "https://doi.org/10.5281/zenodo.99999",
       "type": "doi"
@@ -34,10 +35,14 @@
         "keyword": ["metabolic biomarkers", "longitudinal cohort", "anonymised", "open data"],
         "personal_data": "no",
         "sensitive_data": "no",
+        "dataset_id": {
+          "identifier": "metabolic-biomarker-cohort-wave1-5",
+          "type": "other"
+        },
         "distribution": [
           {
             "title": "CSV release",
-            "format": "text/csv",
+            "format": ["text/csv"],
             "data_access": "open",
             "license": [
               {

@@ -1,5 +1,6 @@
 %% fair-publish — Technical demo presentation
 %% Companion to CRIS2026 paper #23
+%% Live demo org: https://github.com/in-silico-institute
 
 \documentclass[aspectratio=169]{beamer}
 
@@ -87,20 +88,21 @@
 \setbeamertemplate{itemize subitem}{\small\raisebox{0.5pt}{\textcolor{crisnavy}{$\bullet$}}}
 \setbeamertemplate{footline}{%
   \begin{beamercolorbox}[wd=\paperwidth, ht=2.5ex, dp=1.5ex]{footline}%
-    \hspace{1em}\textbf{fair-publish} --- Technical overview%
+    \hspace{1em}\textbf{fair-publish} --- Live demo%
     \hfill University of Alcalá / IRyCIS%
     \hfill\insertframenumber\,/\,\inserttotalframenumber\hspace{1em}%
   \end{beamercolorbox}%
 }
 
+
 %------------------------------------------------------------------------------
 \title{\texttt{fair-publish}}
-\subtitle{Policy-enforced FAIR metadata validation and publishing pipeline\\[4pt]
-  \normalsize Technical overview \& demo}
+\subtitle{Policy-enforced FAIR metadata CI/CD\\[4pt]
+  \normalsize Live demo --- \texttt{github.com/in-silico-institute}}
 \author{M.-A. Sicilia · A. Ballesteros-Rodríguez · E. García-Barriocanal ·
   M. Mora-Cantallops · A. Nogales}
 \institute{University of Alcalá \textbar{} IRyCIS}
-\date{}
+\date{CRIS2026}
 
 %------------------------------------------------------------------------------
 \begin{document}
@@ -123,28 +125,55 @@
 \end{frame}
 
 %==============================================================================
-\section{What problem does it solve?}
+\section{The demo organisation}
 %==============================================================================
 
-\begin{frame}{The metadata publication problem}
+\begin{frame}[shrink=5]{The demo organisation --- \texttt{github.com/in-silico-institute}}
   \begin{columns}[T]
-    \column{0.52\textwidth}
-      In a research organisation, a dataset record must be:
-      \begin{itemize}
-        \item Described in a \textbf{Data Management Plan} (DMP)
-        \item Validated against \textbf{institutional policy}
-        \item Published to \textbf{one or more FAIR repositories}
-        \item \textbf{Versioned} when the dataset evolves
-      \end{itemize}
-      \vspace{0.35cm}
-      Today this is done \alert{manually, inconsistently, and late}
-    \column{0.45\textwidth}
-      \begin{block}{The CI/CD analogy}
-        Software engineering solved the same problem:\\[4pt]
-        \textbf{source of truth} (code) $\to$ \textbf{automated tests}
-        (policy) $\to$ \textbf{release} (repository)\\[6pt]
-        \texttt{fair-publish} applies this pattern to\\
-        \textbf{FAIR metadata publication}
+    \column{0.32\textwidth}
+      \begin{block}{\texttt{.github} (governance)}
+        \footnotesize
+        Org-level special repo.\\[4pt]
+        \texttt{.github/workflows/}
+        \begin{itemize}\setlength\itemsep{1pt}
+          \item \texttt{fair-validate.yml}
+          \item \texttt{fair-publish.yml}
+        \end{itemize}
+        \texttt{.github/policies/}
+        \begin{itemize}\setlength\itemsep{1pt}
+          \item \texttt{fair-policy.yml}
+        \end{itemize}
+        \vspace{4pt}
+        \textit{Owned by institution.\\Policies update all\\project repos on next push.}
+      \end{block}
+
+    \column{0.32\textwidth}
+      \begin{block}{\texttt{fair-publish} (engine)}
+        \footnotesize
+        Generic, institution-agnostic\\package. GHA steps call:\\[4pt]
+        \texttt{fair-publish validate}\\
+        \texttt{fair-publish publish}\\[4pt]
+        Institution-specific rules\\live in \texttt{.github}, not here.\\[4pt]
+        \textit{Installed at runtime via\\
+        \texttt{pip install git+\ldots}}
+      \end{block}
+
+    \column{0.32\textwidth}
+      \begin{block}{\texttt{demo-dataset} (project)}
+        \footnotesize
+        One PI's dataset repo.\\[4pt]
+        \begin{itemize}\setlength\itemsep{1pt}
+          \item \texttt{dmp.json} --- the maDMP
+          \item \texttt{zenodo\_state.json}
+          \item \texttt{.github/workflows/}
+            \begin{itemize}
+              \item \texttt{validate.yml}
+              \item \texttt{publish.yml}
+            \end{itemize}
+        \end{itemize}
+        \vspace{4pt}
+        \textit{PI (or UI tool) pushes\\
+        \texttt{dmp.json}.\\Everything else is inherited.}
       \end{block}
   \end{columns}
 \end{frame}
@@ -153,82 +182,308 @@
 \section{Architecture}
 %==============================================================================
 
-\begin{frame}{System architecture}
+\begin{frame}{The publication pipeline}
   \begin{center}
   \begin{tikzpicture}[
     font=\scriptsize,
     node distance=0.5cm and 0.8cm,
     box/.style={draw=crisnavy, fill=crislight, rounded corners=4pt,
-                text width=2.0cm, align=center, minimum height=0.8cm},
+                text width=2.2cm, align=center, minimum height=0.8cm},
     store/.style={draw=cristeal, fill=white, rounded corners=4pt,
-                  text width=2.0cm, align=center, minimum height=0.8cm, dashed},
+                  text width=2.2cm, align=center, minimum height=0.8cm, dashed},
     arr/.style={-{Stealth[length=5pt]}, cristeal, thick},
+    human/.style={-{Stealth[length=5pt]}, crisgreen, thick, dashed},
+    sysbox/.style={draw=gray!50, rounded corners=6pt, fill=gray!6,
+                   inner sep=7pt, dashed},
   ]
     \node[box] (tool)  {DMP authoring\\tool (external)};
     \node[box, right=1.2cm of tool] (gh)   {GitHub repo\\(\texttt{dmp.json})};
     \node[store, right=1.2cm of gh]  (gha1) {\textit{fair-validate}\\on push};
     \node[store, below=0.7cm of gha1](gha2) {\textit{fair-publish}\\on release};
-    \node[box, right=1.2cm of gha2]  (zen)  {Zenodo\\Dataverse};
-    \node[box, below=0.7cm of gh]    (state){zenodo\\\_state.json};
+    \node[box, right=1.2cm of gha2]  (zen)  {Zenodo\\(unpublished)};
+    \node[box, below=0.7cm of gh]    (state){\texttt{zenodo\_state}\\$\texttt{.json}$};
 
-    \draw[arr] (tool) -- node[above,font=\tiny]{exports maDMP} (gh);
-    \draw[arr] (gh)   -- node[above,font=\tiny]{push} (gha1);
-    \draw[arr] (gh)   -- node[right,font=\tiny,xshift=2pt]{release} (gha2);
-    \draw[arr] (gha2) -- node[above,font=\tiny]{deploy} (zen);
-    \draw[arr] (gha2) -- node[right,font=\tiny,xshift=2pt]{update} (state);
-    \draw[arr] (state) -- node[left,font=\tiny,xshift=-2pt]{read} (gha2);
+    % System boundaries (drawn first so they sit behind nodes)
+    \begin{pgfonlayer}{background}
+      \node[sysbox, fit=(tool),
+            label={[font=\tiny\bfseries, gray, yshift=2pt]north:Institute}] {};
+      \node[sysbox, fit=(gh)(gha1)(gha2)(state),
+            label={[font=\tiny\bfseries, gray, xshift=18pt, yshift=2pt]north west:GitHub}] {};
+      \node[sysbox, fit=(zen),
+            label={[font=\tiny\bfseries, gray, yshift=2pt]north:Zenodo}] {};
+    \end{pgfonlayer}
 
-    % Org policy annotation
+    % Both manual steps use the same dashed-green human style
+    \draw[human] (tool) -- (gh);
+    \draw[arr]   (gh)   -- node[above,font=\tiny]{push} (gha1);
+    % Route via gap between columns (right of gh.east) to avoid crossing state
+    \draw[human] ([xshift=5pt]gh.east) |- (gha2.west);
+    \draw[arr]   (gha2) -- node[above,font=\tiny]{deploy} (zen);
+    % Opposite bends keep update/read labels from colliding
+    \draw[arr]   (gha2) to[bend right=14] node[above,font=\tiny]{update} (state);
+    \draw[arr]   (state) to[bend right=14] node[below,font=\tiny]{read} (gha2);
+
     \node[above=0.3cm of gha1, font=\tiny, crisnavy, align=center]
       {org-level policy\\(\texttt{.github/policies/fair-policy.yml})};
     \draw[crisaccent, dotted] (gha1.north) -- ++(0, 0.25);
   \end{tikzpicture}
+
+  \smallskip
+  {\tiny
+   \textcolor{cristeal}{\rule[0.5ex]{0.5cm}{0.6pt}$\blacktriangleright$}\;automated\qquad
+   \textcolor{crisgreen}{\textendash\,\textendash\,$\blacktriangleright$}\;PI creates GitHub release (manual)}
   \end{center}
 \end{frame}
 
-\begin{frame}{Two-workflow design}
+\begin{frame}[shrink=7]{Two-workflow design}
   \begin{columns}[T]
     \column{0.48\textwidth}
-      \textbf{Workflow 1: \texttt{fair-validate.yml}}\\
-      \textit{Trigger: push / pull request to main}
-      \begin{itemize}
+      \textbf{Workflow 1 --- \texttt{fair-validate.yml}}\\
+      \textit{Trigger: push / pull request (paths: dmp.json)}
+      \begin{itemize}\setlength\itemsep{2pt}
         \item Structural validation via \texttt{madmpy}
-        \item Policy rule checks (per dataset)
-        \item Blocks merge if any error-level rule fails
-        \item Writes GHA step summary with rule-by-rule table
+        \item Runs each policy rule against every dataset
+        \item Exit 1 if any error-level rule fails
+        \item Writes rule-by-rule table to GHA step summary
       \end{itemize}
-      \vspace{0.3cm}
+      \vspace{0.15cm}
       \begin{alertblock}{Governance requirement}
-        \footnotesize Branch protection rules must require this
-        workflow to pass --- otherwise a PI can release without
-        validation
+        \footnotesize Branch protection must require this check ---
+        otherwise a PI can create a release without validation passing
       \end{alertblock}
 
     \column{0.48\textwidth}
-      \textbf{Workflow 2: \texttt{fair-publish.yml}}\\
+      \textbf{Workflow 2 --- \texttt{fair-publish.yml}}\\
       \textit{Trigger: GitHub release published}
-      \begin{itemize}
-        \item Publishes each dataset in the DMP to Zenodo
-        \item New dataset $\to$ new Zenodo record
+      \begin{itemize}\setlength\itemsep{2pt}
+        \item Trusts the validation gate (no re-validation)
+        \item New dataset $\to$ create new Zenodo record
         \item Known dataset $\to$ new version (via \texttt{zenodo\_state.json})
         \item Commits updated state file back to repo
-        \item Creates \texttt{published/<tag>} git tag
       \end{itemize}
+      \vspace{0.1cm}
+      \begin{block}{Why split?}
+        \footnotesize Validation gives fast feedback on every push.
+        Publishing only happens at a deliberate version event.
+        The gate cannot be bypassed.
+      \end{block}
   \end{columns}
 \end{frame}
 
 %==============================================================================
-\section{The rule system}
+\section{Live demo}
 %==============================================================================
 
-\begin{frame}[fragile]{Built-in FAIR rules}
-  Rules operate on \texttt{(DMP, Dataset)} pairs from \texttt{madmpy} objects.
+\begin{frame}[fragile,shrink=15]{Step 1 --- the maDMP (\texttt{dmp.json})}
+  \textbf{Open:} \texttt{github.com/in-silico-institute/demo-dataset/blob/main/dmp.json}
+
+  \vspace{0.1cm}
+  \begin{columns}[T]
+    \column{0.50\textwidth}
+      \begin{lstlisting}[style=yaml, caption={dmp.json (key fields)}]
+{
+  "dmp": {
+    "title": "Longitudinal cohort study ...",
+    "language": "eng",
+    "contact": {
+      "name": "Garcia, Elena",
+      "contact_id": {
+        "identifier":
+          "https://orcid.org/0000-0001-6752-9599",
+        "type": "orcid"
+      }
+    },
+    "dataset": [{
+      "title": "Metabolic biomarker dataset",
+      "dataset_id": {
+        "identifier":
+          "metabolic-biomarker-cohort-wave1-5",
+        "type": "other"
+      },
+      "distribution": [{
+        "data_access": "open",
+        "license": [{
+          "license_ref":
+            "https://creativecommons.org/licenses/by/4.0/"
+        }]
+      }]
+    }]
+  }
+}
+      \end{lstlisting}
+
+    \column{0.47\textwidth}
+      \textbf{What the pipeline reads:}
+      \begin{itemize}\setlength\itemsep{2pt}
+        \item \texttt{contact.contact\_id} $\to$ ORCID check
+        \item \texttt{dataset[].keyword} $\to$ keyword check
+        \item \texttt{distribution[].license} $\to$ license check
+        \item \texttt{distribution[].data\_access} $\to$ access rights
+        \item \texttt{dataset\_id.identifier} $\to$ state key
+        \item \texttt{contributor[]} $\to$ Zenodo creators
+      \end{itemize}
+      \vspace{0.1cm}
+      \footnotesize
+      Parsed by \texttt{madmpy} (RDA maDMP Common Standard).
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Step 2 --- validation on push}
+  \textbf{Open:} \texttt{github.com/in-silico-institute/demo-dataset/actions}\\
+  \textit{Select the \textbf{validate.yml} workflow --- most recent run}
 
   \vspace{0.3cm}
   \begin{columns}[T]
+    \column{0.40\textwidth}
+      \textbf{What triggers it:}
+      \begin{lstlisting}[style=yaml]
+on:
+  push:
+    branches: [main]
+    paths: ["dmp.json"]
+  pull_request:
+    paths: ["dmp.json"]
+
+jobs:
+  validate:
+    uses: in-silico-institute/.github/
+      .github/workflows/
+      fair-validate.yml@main
+    with:
+      dmp_path: dmp.json
+      policy_path:
+        .github/policies/fair-policy.yml
+      \end{lstlisting}
+
+    \column{0.57\textwidth}
+      \textbf{Actual run output (step summary):}
+      \begin{lstlisting}[style=yaml]
+DMP: Longitudinal cohort study of metabolic biomarkers
+Datasets: 1  Errors: 0  Warnings: 0
+
+  Dataset: Metabolic biomarker dataset [metabolic-biomarker-cohort-wave1-5]
+    [F1, A1] Creator ORCID present        OK
+    [R1.1]   License present & recognized OK
+    [F2]     At least one keyword         OK
+    [F2, R1] Description length           OK
+    [A1]     Access rights stated         OK
+    [F1]     Dataset identifier present   OK
+
+PASSED
+      \end{lstlisting}
+      \vspace{0.1cm}
+      \footnotesize All 6 rules pass. Exit code 0.\\
+      A failing rule would exit 1 and block the release.
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile,shrink=5]{Step 3 --- release triggers publishing}
+  \textbf{Open:} \texttt{github.com/in-silico-institute/demo-dataset/actions}\\
+  \textit{Select the \textbf{publish.yml} workflow --- most recent successful run}
+
+  \vspace{0.25cm}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+      \textbf{What triggers it:}
+      \begin{lstlisting}[style=yaml]
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    uses: in-silico-institute/.github/
+      .github/workflows/
+      fair-publish.yml@main
+    with:
+      dmp_path: dmp.json
+      sandbox: true
+    secrets: inherit
+      \end{lstlisting}
+      \vspace{0.15cm}
+      \footnotesize \texttt{ZENODO\_TOKEN} stored as\\
+      org-level secret --- PI never\\
+      handles credentials directly.
+
+    \column{0.57\textwidth}
+      \textbf{Actual run output:}
+      \begin{lstlisting}[style=yaml]
+DMP validated!
+
+  [created] Metabolic biomarker dataset
+            cohort wave 1-5
+            -> 10.5072/zenodo.499935
+
+{
+  "published": {
+    "metabolic-biomarker-cohort-wave1-5":
+      "10.5072/zenodo.499935"
+  },
+  "new":     { "metabolic-...": "10.5072/zenodo.499935" },
+  "updated": {}
+}
+
+[main] chore: update zenodo_state.json
+      \end{lstlisting}
+      \vspace{0.1cm}
+      \footnotesize Zenodo sandbox record created.\\
+      State file committed back automatically.
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Step 4 --- state file and versioning}
+  \textbf{Open:} \texttt{github.com/in-silico-institute/demo-dataset/blob/main/zenodo\_state.json}
+
+  \vspace{0.3cm}
+  \begin{columns}[T]
+    \column{0.45\textwidth}
+      \textbf{What's in the repo now:}
+      \begin{lstlisting}[style=yaml, caption={zenodo\_state.json}]
+{
+  "metabolic-biomarker-cohort-wave1-5":
+    "10.5072/zenodo.499935"
+}
+      \end{lstlisting}
+      \vspace{0.25cm}
+      \footnotesize
+      Key: \texttt{dataset\_id.identifier} from the maDMP\\
+      Value: Zenodo \textbf{concept DOI} --- stable across versions
+
+    \column{0.52\textwidth}
+      \textbf{Decision logic on the next release:}
+      \vspace{0.2cm}
+      \begin{tikzpicture}[
+        font=\scriptsize,
+        node distance=0.35cm,
+        box/.style={draw=crisnavy, fill=crislight, rounded corners=3pt,
+                    text width=2.8cm, align=center, minimum height=0.6cm},
+        dec/.style={draw=cristeal, fill=white, rounded corners=3pt,
+                    text width=2.4cm, align=center, minimum height=0.6cm, dashed},
+        arr/.style={-{Stealth[length=4pt]}, cristeal, thick},
+      ]
+        \node[box] (each) {For each dataset\\in \texttt{dmp.json}};
+        \node[dec, below=0.35cm of each] (known) {Key in\\state file?};
+        \node[box, below left=0.35cm and 0.1cm of known]  (cre) {Create new\\Zenodo record};
+        \node[box, below right=0.35cm and 0.1cm of known] (upd) {New version\\(same concept DOI)};
+        \node[box, below=1.85cm of known] (save) {Save concept DOI\\back to state file};
+        \draw[arr] (each) -- (known);
+        \draw[arr] (known) -- node[left,font=\tiny]{no}  (cre);
+        \draw[arr] (known) -- node[right,font=\tiny]{yes} (upd);
+        \draw[arr] (cre)  |- (save);
+        \draw[arr] (upd)  |- (save);
+      \end{tikzpicture}
+  \end{columns}
+\end{frame}
+
+%==============================================================================
+\section{Rule system}
+%==============================================================================
+
+\begin{frame}[fragile,shrink=6]{Built-in rules and policy}
+  \begin{columns}[T]
     \column{0.48\textwidth}
-      \textbf{Built-in rules:}
-      \begin{itemize}
+      \textbf{Six built-in FAIR rules:}
+      \begin{itemize}\setlength\itemsep{3pt}
         \item Creator ORCID present \hfill\textit{F1, A1}
         \item License present \& recognized \hfill\textit{R1.1}
         \item At least one keyword \hfill\textit{F2}
@@ -236,30 +491,39 @@
         \item Access rights stated \hfill\textit{A1}
         \item Dataset identifier present \hfill\textit{F1}
       \end{itemize}
-      \vspace{0.2cm}
-      Each rule returns:\\
-      \texttt{passed}, \texttt{severity}, \texttt{field}, \texttt{message}, \texttt{fair}
+      \vspace{0.25cm}
+      \textbf{Open:} \texttt{github.com/in-silico-institute/}\\
+      \texttt{.github/blob/main/.github/policies/}\\
+      \texttt{fair-policy.yml}
 
     \column{0.50\textwidth}
-      \begin{lstlisting}[style=python, caption={Rule protocol}]
-class Rule(Protocol):
-    name: str
-    severity: str  # "error" | "warning"
-    fair: str
+      \begin{lstlisting}[style=yaml, caption={fair-policy.yml (in-silico-institute)}]
+rules:
+  - name: Creator ORCID present
+    severity: warning
+  - name: License present and recognized
+    severity: error
+  - name: At least one keyword
+    severity: warning
+  - name: Description length
+    severity: warning
+    config:
+      min_chars: 100
+  - name: Access rights stated
+    severity: error
+  - name: Dataset identifier present
+    severity: error
 
-    def __call__(
-        self, dmp: Any, dataset: Any
-    ) -> RuleResult: ...
+targets:
+  - zenodo
       \end{lstlisting}
-      \vspace{0.15cm}
-      \footnotesize \textbf{error} $\to$ blocks publishing\\
-      \textbf{warning} $\to$ reported only
   \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Custom domain rules}
+\begin{frame}[fragile]{Extending with domain rules}
   Institutions add domain-specific rules without modifying the core package.
 
+  \vspace{0.05cm}
   \begin{columns}[T]
     \column{0.50\textwidth}
       \begin{lstlisting}[style=python, caption={Example: SNOMED CT rule}]
@@ -288,8 +552,6 @@ class SnomedCtKeyword:
     \column{0.47\textwidth}
       \begin{lstlisting}[style=yaml, caption={Register in policy.yml}]
 rules:
-  - name: Creator ORCID present
-    severity: error
   - name: License present and recognized
     severity: error
   - name: At least one keyword
@@ -307,239 +569,53 @@ extra_rules:
 targets:
   - zenodo
       \end{lstlisting}
+      \vspace{0.05cm}
+      \footnotesize One policy YAML per institution.\\
+      Propagates to all project repos automatically.
   \end{columns}
 \end{frame}
 
 %==============================================================================
-\section{DMP and dataset lifecycle}
+\section{Adoption}
 %==============================================================================
 
-\begin{frame}{maDMP as source of truth}
-  \begin{columns}[T]
-    \column{0.50\textwidth}
-      One DMP per project, one or more datasets per DMP.\\[6pt]
-      The DMP is authored in an \textbf{external researcher-friendly tool}
-      and exported as RDA maDMP JSON.\\[6pt]
-      \textbf{Key fields used by the pipeline:}
-      \begin{itemize}
-        \item \texttt{dmp.contact} / \texttt{contributor} $\to$ creators
-        \item \texttt{dataset[].title}, \texttt{description}, \texttt{keyword}
-        \item \texttt{dataset[].distribution[].license} $\to$ SPDX id
-        \item \texttt{dataset[].distribution[].data\_access} $\to$ access right
-        \item \texttt{dataset[].dataset\_id} $\to$ stable key for state tracking
-      \end{itemize}
-      \vspace{0.2cm}
-      \textbf{Release tag} (e.g.\ \texttt{v1.2.0}) $\to$ Zenodo version string
-
-    \column{0.47\textwidth}
-      \textbf{Dataset lifecycle across DMP versions:}
-      \vspace{0.2cm}
-      \begin{tikzpicture}[
-        font=\scriptsize,
-        box/.style={draw=crisnavy, fill=crislight, rounded corners=3pt,
-                    text width=2.8cm, align=center, minimum height=0.65cm},
-        arr/.style={-{Stealth[length=4pt]}, cristeal, thick},
-      ]
-        \node[box] (new)  {Dataset appears\\in DMP for first time};
-        \node[box, below=0.45cm of new] (create) {Create new\\Zenodo record};
-        \node[box, below=0.45cm of create] (known) {Dataset updated\\in next DMP version};
-        \node[box, below=0.45cm of known] (ver)   {New Zenodo version\\(same concept DOI)};
-        \node[box, below=0.45cm of ver]   (drop)  {Dataset removed\\from DMP};
-        \node[box, below=0.45cm of drop]  (keep)  {Zenodo record untouched\\(no further updates)};
-        \draw[arr] (new)   -- (create);
-        \draw[arr] (known) -- (ver);
-        \draw[arr] (drop)  -- (keep);
-      \end{tikzpicture}
-  \end{columns}
-\end{frame}
-
-\begin{frame}[fragile]{State tracking: \texttt{zenodo\_state.json}}
-  Committed alongside \texttt{dmp.json} in the project repository.\\
-  Maps \texttt{dataset\_id.identifier} $\to$ Zenodo concept DOI.
-
-  \vspace{0.3cm}
-  \begin{columns}[T]
-    \column{0.47\textwidth}
-      \begin{lstlisting}[style=yaml, caption={After first release}]
-{
-  "https://doi.org/10.5281/zenodo.AAAA":
-    "10.5281/zenodo.AAAA",
-  "https://github.com/myorg/proj/ds-B":
-    "10.5281/zenodo.BBBB"
-}
-      \end{lstlisting}
-      \vspace{0.2cm}
-      \footnotesize Auto-committed by the pipeline bot after each
-      successful release. No manual editing required.
-
-    \column{0.50\textwidth}
-      \textbf{Decision logic at publish time:}
-      \vspace{0.2cm}
-      \begin{tikzpicture}[
-        font=\scriptsize,
-        node distance=0.4cm,
-        box/.style={draw=crisnavy, fill=crislight, rounded corners=3pt,
-                    text width=2.6cm, align=center, minimum height=0.65cm},
-        dec/.style={draw=cristeal, fill=white, rounded corners=3pt,
-                    text width=2.2cm, align=center, minimum height=0.65cm, dashed},
-        arr/.style={-{Stealth[length=4pt]}, cristeal, thick},
-      ]
-        \node[box] (each) {For each dataset\\in dmp.json};
-        \node[dec, below=0.4cm of each] (known) {In state file?};
-        \node[box, below left=0.4cm and 0.2cm of known]  (cre) {Create new\\Zenodo record};
-        \node[box, below right=0.4cm and 0.2cm of known] (upd) {New version of\\existing record};
-        \node[box, below=2.0cm of known] (save) {Save concept DOI\\to state file};
-        \draw[arr] (each) -- (known);
-        \draw[arr] (known) -- node[left,font=\tiny]{no}  (cre);
-        \draw[arr] (known) -- node[right,font=\tiny]{yes} (upd);
-        \draw[arr] (cre)  |- (save);
-        \draw[arr] (upd)  |- (save);
-      \end{tikzpicture}
-  \end{columns}
-\end{frame}
-
-%==============================================================================
-\section{Institution adoption}
-%==============================================================================
-
-\begin{frame}[fragile]{Adopting fair-publish --- three steps}
-  \begin{columns}[T]
-    \column{0.48\textwidth}
-      \textbf{Step 1 — Org-level setup (once)}
-      \begin{itemize}
-        \item Add workflows to \texttt{ORG/.github}
-        \item Commit \texttt{fair-policy.yml}
-        \item Store \texttt{ZENODO\_TOKEN} as org secret
-      \end{itemize}
-
-      \vspace{0.25cm}
-      \textbf{Step 2 — Per project (minimal)}
-      \begin{lstlisting}[style=yaml]
-# .github/workflows/publish.yml
-on:
-  release:
-    types: [published]
-jobs:
-  publish:
-    uses: MY-ORG/.github/
-      .github/workflows/
-      fair-publish.yml@v1
-    with:
-      dmp_path: dmp.json
-    secrets:
-      zenodo_token:
-        ${{ secrets.ZENODO_TOKEN }}
-      \end{lstlisting}
-
-    \column{0.48\textwidth}
-      \textbf{Step 3 — Branch protection (governance)}\\[4pt]
-      \begin{itemize}
-        \item Require \textit{Validate maDMP} status check
-        \item Apply via org-level Ruleset $\to$ propagates\\
-              to all project repos automatically
-      \end{itemize}
-
-      \vspace{0.3cm}
-      \begin{block}{What the PI sees}
-        \begin{enumerate}
-          \item Edit DMP in institutional tool
-          \item Tool pushes \texttt{dmp.json} to GitHub
-          \item Validation result visible in pull request
-          \item PI clicks \textit{Create release} in GitHub UI
-          \item Zenodo records appear automatically
-        \end{enumerate}
-      \end{block}
-  \end{columns}
-\end{frame}
-
-%==============================================================================
-\section{Demo}
-%==============================================================================
-
-\begin{frame}[fragile]{Running the pipeline locally}
-  \texttt{simulate\_release.py} reproduces the full PI release cycle against
-  the Zenodo sandbox --- no GitHub repository or production credentials needed.
-
-  \vspace{0.3cm}
-  \begin{lstlisting}[style=shell]
-# Install the package
-pip install fair-publish
-
-# Validate only (fast feedback)
-fair-publish validate example/dmp.json --policy example/policy.yml
-
-# Full simulation: validate + publish to Zenodo sandbox
-python simulate_release.py \
-    --dmp    example/dmp.json \
-    --policy example/policy.yml \
-    --release-tag v1.0.0
-
-# Output:
-# == Step 1: Validate maDMP ==
-# DMP: Longitudinal cohort study of metabolic biomarkers
-# Datasets: 1   Errors: 0   Warnings: 0
-# PASSED
-#
-# == Step 2: Publish datasets ==
-#   [created] Metabolic biomarker dataset ... -> 10.5281/zenodo.XXXX
-#
-# State written to: example/zenodo_state.json
-  \end{lstlisting}
-\end{frame}
-
-\begin{frame}[fragile]{Validation report in GHA}
-  The step summary written to the GitHub Actions UI after each push:
-
-  \vspace{0.3cm}
-  \begin{lstlisting}[style=yaml]
-## FAIR Validation Report
-✅ PASSED — 0 errors, 1 warning
-
-### Dataset: Metabolic biomarker dataset — cohort wave 1-5
-| Rule                          | FAIR       | Status | Message              |
-|-------------------------------|------------|--------|----------------------|
-| Creator ORCID present         | F1, A1     |   ✓    | OK                   |
-| License present and recognized| R1.1       |   ✓    | OK                   |
-| At least one keyword          | F2         |   ✓    | OK                   |
-| Description length            | F2, R1     |   ⚠    | 198 chars; min 150   |
-| Access rights stated          | A1         |   ✓    | OK                   |
-| Dataset identifier present    | F1         |   ✓    | OK                   |
-  \end{lstlisting}
-\end{frame}
 
 %==============================================================================
 \section{Summary}
 %==============================================================================
 
-\begin{frame}{Summary}
+\begin{frame}[shrink=10]{Summary and limitations}
   \begin{columns}[T]
     \column{0.52\textwidth}
-      \textbf{What fair-publish provides:}
-      \begin{itemize}\setlength\itemsep{3pt}
-        \item Pluggable rule protocol --- built-in FAIR rules
+      \textbf{What the pipeline provides:}
+      \begin{itemize}\setlength\itemsep{1pt}
+        \item Pluggable rule protocol: built-in FAIR rules
               + institution domain rules
-        \item YAML policy config at org level, inherited by all projects
-        \item Per-dataset lifecycle tracking (\texttt{zenodo\_state.json})
-        \item Two-workflow GHA design: validate on push,
+        \item One YAML policy at org level, inherited by all projects
+        \item Per-dataset lifecycle tracking (\texttt{zenodo\_state.json}):\\
+              new record vs.\ new version decided automatically
+        \item Two-workflow design: validate on push,
               deploy on release
-        \item Git tags for publication status history
         \item CLI for local validation and sandbox simulation
+        \item Low entry barrier: two files per project repo
       \end{itemize}
 
     \column{0.45\textwidth}
-      \begin{alertblock}{Assumptions \& scope}
+      \begin{alertblock}{Current limitations}
         \begin{itemize}\setlength\itemsep{2pt}
-          \item DMP authoring tool is external
-          \item Repos owned by institution
-          \item Branch protection configured org-wide
-          \item Metadata only (no data file upload)
+          \item DMP authoring tool is external (assumed to exist)
+          \item Repos must be institution-owned
+          \item Branch protection must be configured separately
+          \item Metadata only --- no data file upload yet
+          \item Policy evolution not automated
+          \item No error notification mechanism
         \end{itemize}
       \end{alertblock}
-      \vspace{0.3cm}
-      \begin{block}{Code}
+      \vspace{0.1cm}
+      \begin{block}{Live demo org}
         \footnotesize
-        \url{https://github.com/irycis/fair-publish}\\[4pt]
-        \texttt{pip install fair-publish}
+        \url{https://github.com/in-silico-institute}\\[4pt]
+        Package: \texttt{in-silico-institute/fair-publish}
       \end{block}
   \end{columns}
 \end{frame}
@@ -556,7 +632,7 @@ python simulate_release.py \
   \begin{center}
     {\LARGE\textcolor{white}{\textbf{Questions?}}}\\[0.6cm]
     {\normalsize\textcolor{crislight}{\texttt{msicilia@uah.es}}}\\[0.4cm]
-    {\small\textcolor{crisaccent}{\url{https://github.com/irycis/fair-publish}}}
+    {\small\textcolor{crisaccent}{\url{https://github.com/in-silico-institute}}}
   \end{center}
 \end{frame}
 }

@@ -2,8 +2,16 @@
 Zenodo deployment adapter.
 
 Iterates over every dataset in a validated maDMP and either creates a
-new Zenodo record or publishes a new version of an existing one, using
-the state file (zenodo_state.json) to decide which path to take.
+new Zenodo draft or adds a new draft version of an existing record,
+using the state file (zenodo_state.json) to decide which path to take.
+
+Records are left as DRAFTS — a human curator must visit Zenodo and
+click Publish to make them publicly accessible and register the DOI.
+The prereserved DOI is available immediately in the draft and is stored
+in the state file so it can be referenced before publication.
+
+State file schema: dataset_id.identifier → Zenodo deposition record ID
+  (integer stored as string, e.g. "12345")
 
 Field mapping (RDA maDMP → Zenodo metadata):
   dmp.contact / dmp.contributor       → metadata.creators
@@ -147,35 +155,34 @@ class ZenodoAdapter:
         )
         resp.raise_for_status()
 
-    def _create(self, metadata: dict) -> dict:
+    def _create_draft(self, metadata: dict) -> dict:
+        """Create a new Zenodo draft deposition without publishing it."""
         resp = requests.post(f"{self.base}/deposit/depositions",
                              json={}, headers=self._headers(), timeout=30)
         resp.raise_for_status()
-        dep_id = resp.json()["id"]
+        dep = resp.json()
+        dep_id = dep["id"]
 
         resp = requests.put(f"{self.base}/deposit/depositions/{dep_id}",
                             json={"metadata": metadata},
                             headers=self._headers(), timeout=30)
         resp.raise_for_status()
+        dep = resp.json()
 
         self._upload_placeholder(dep_id)
 
-        resp = requests.post(
-            f"{self.base}/deposit/depositions/{dep_id}/actions/publish",
-            headers=self._headers(), timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        prereserved_doi = (dep.get("metadata", {})
+                           .get("prereserve_doi", {})
+                           .get("doi", ""))
+        return {"id": str(dep_id), "doi": prereserved_doi}
 
-    def _new_version(self, concept_doi: str, metadata: dict) -> dict:
-        resp = requests.get(f"{self.base}/records",
-                            params={"q": f"conceptdoi:\"{concept_doi}\"", "size": 1},
-                            headers=self._headers(), timeout=30)
-        resp.raise_for_status()
-        hits = resp.json().get("hits", {}).get("hits", [])
-        if not hits:
-            raise ValueError(f"No record found for concept DOI {concept_doi}")
-        record_id = hits[0]["id"]
+    def _new_version_draft(self, record_id: str, metadata: dict) -> dict:
+        """Add a new draft version to an existing published record.
 
+        record_id must be the Zenodo deposition ID of a *published* record.
+        The caller is responsible for ensuring the previous draft was
+        published before triggering a new version.
+        """
         resp = requests.post(
             f"{self.base}/deposit/depositions/{record_id}/actions/newversion",
             headers=self._headers(), timeout=30)
@@ -186,23 +193,27 @@ class ZenodoAdapter:
                             json={"metadata": metadata},
                             headers=self._headers(), timeout=30)
         resp.raise_for_status()
+        dep = resp.json()
 
-        resp = requests.post(
-            f"{self.base}/deposit/depositions/{new_id}/actions/publish",
-            headers=self._headers(), timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        prereserved_doi = (dep.get("metadata", {})
+                           .get("prereserve_doi", {})
+                           .get("doi", ""))
+        return {"id": str(new_id), "doi": prereserved_doi}
 
     def publish_dmp(self, dmp: Any, state: dict[str, str],
                     version_tag: str) -> dict[str, str]:
         """
-        Publish every dataset in the DMP.
+        Create Zenodo draft depositions for every dataset in the DMP.
 
         For each dataset:
-          - If its dataset_id is in `state`, create a new Zenodo version.
-          - Otherwise, create a new Zenodo record.
+          - If its dataset_id is in `state` (stored as a deposition record ID),
+            create a new draft version of that record.
+          - Otherwise, create a new draft deposition.
 
-        Returns an updated state dict (dataset_id → concept_doi).
+        Records are left unpublished; a curator must publish them on Zenodo
+        to register the DOI and make the record publicly accessible.
+
+        Returns an updated state dict (dataset_id → deposition record ID).
         """
         from ..state import dataset_key
 
@@ -213,14 +224,22 @@ class ZenodoAdapter:
             metadata = _dataset_to_zenodo_metadata(dmp, dataset, version_tag)
 
             if key in state:
-                result = self._new_version(state[key], metadata)
-                action = "updated"
+                result = self._new_version_draft(state[key], metadata)
+                action = "new draft version"
             else:
-                result = self._create(metadata)
-                action = "created"
+                result = self._create_draft(metadata)
+                action = "draft created"
 
+<<<<<<< HEAD
             concept_doi = result.get("conceptdoi") or result.get("doi", "")
             updated_state[key] = concept_doi
             print(f"  [{action}] {metadata['title']} → {concept_doi}", file=sys.stderr)
+=======
+            record_id = result["id"]
+            doi = result.get("doi", "(reserved after publish)")
+            updated_state[key] = record_id
+            print(f"  [{action}] {metadata['title']} → id={record_id} doi={doi}",
+                  file=sys.stderr)
+>>>>>>> c86c3f1 (Draft-mode Zenodo publishing, rule fixes, updated slides)
 
         return updated_state
