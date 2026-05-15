@@ -1,0 +1,98 @@
+# Pre-release validation workflow.
+#
+# Triggered on every push and pull request to the default branch so that
+# a DMP that fails institutional policy never reaches a release.  The
+# fair-publish.yml release workflow can then skip re-validation and go
+# straight to deployment, trusting that this gate already passed.
+#
+# Institutions host this file alongside fair-publish.yml in their
+# org-level .github repository:
+#   MY-ORG/.github  →  .github/workflows/fair-validate.yml
+#
+# Project repositories call it:
+#
+#   on:
+#     push:
+#       branches: [main]
+#       paths: ["dmp.json"]
+#     pull_request:
+#       paths: ["dmp.json"]
+#   jobs:
+#     validate:
+#       uses: MY-ORG/.github/.github/workflows/fair-validate.yml@v1
+#       with:
+#         dmp_path: dmp.json
+
+on:
+  workflow_call:
+    inputs:
+      dmp_path:
+        description: "Path to the maDMP JSON file."
+        required: true
+        type: string
+      policy_path:
+        description: "Institution policy YAML. Falls back to built-in defaults if absent."
+        required: false
+        type: string
+        default: ".github/policies/fair-policy.yml"
+      fair_publish_version:
+        description: "PyPI version of fair-publish to install."
+        required: false
+        type: string
+        default: "latest"
+    outputs:
+      passed:
+        description: "True if all error-level rules passed."
+        value: ${{ jobs.validate.outputs.passed }}
+
+jobs:
+  validate:
+    name: Validate maDMP
+    runs-on: ubuntu-latest
+    outputs:
+      passed: ${{ steps.validate.outputs.passed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install fair-publish
+        run: |
+          VER="${{ inputs.fair_publish_version }}"
+          pip install ${VER:+fair-publish==$VER} ${VER:-fair-publish}
+
+      - name: Validate
+        id: validate
+        run: |
+          POLICY=""
+          [ -f "${{ inputs.policy_path }}" ] && POLICY="--policy ${{ inputs.policy_path }}"
+          if fair-publish validate "${{ inputs.dmp_path }}" $POLICY; then
+            echo "passed=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Write step summary
+        if: always()
+        run: |
+          POLICY=""
+          [ -f "${{ inputs.policy_path }}" ] && POLICY="--policy ${{ inputs.policy_path }}"
+          echo "## FAIR Validation Report" >> "$GITHUB_STEP_SUMMARY"
+          fair-publish report "${{ inputs.dmp_path }}" $POLICY --format json \
+          | python3 -c "
+          import json, sys
+          r = json.load(sys.stdin)
+          icon = '✅' if r['passed'] else '❌'
+          print(f\"{icon} **{'PASSED' if r['passed'] else 'FAILED'}** — {r['total_errors']} errors, {r['total_warnings']} warnings\n\")
+          for ds in r['datasets']:
+              print(f\"### Dataset: {ds['title']}\")
+              print('| Rule | FAIR | Status | Message |')
+              print('|------|------|--------|---------|')
+              for res in ds['results']:
+                  st = '✓' if res['passed'] else ('✗' if res['severity']=='error' else '⚠')
+                  print(f\"| {res['rule']} | {res['fair']} | {st} | {res['message']} |\")
+              print()
+          " >> "$GITHUB_STEP_SUMMARY"

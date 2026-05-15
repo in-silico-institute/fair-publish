@@ -1,0 +1,7 @@
+\beamer@sectionintoc {1}{What problem does it solve?}{3}{0}{1}
+\beamer@sectionintoc {2}{Architecture}{4}{0}{2}
+\beamer@sectionintoc {3}{The rule system}{6}{0}{3}
+\beamer@sectionintoc {4}{DMP and dataset lifecycle}{8}{0}{4}
+\beamer@sectionintoc {5}{Institution adoption}{10}{0}{5}
+\beamer@sectionintoc {6}{Demo}{11}{0}{6}
+\beamer@sectionintoc {7}{Summary}{13}{0}{7}

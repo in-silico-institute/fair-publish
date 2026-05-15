@@ -1,0 +1,42 @@
+# Institution policy for FAIR metadata enforcement.
+#
+# Copy this file to your .github repository at:
+#   .github/policies/fair-policy.yml
+#
+# All project repos in your GitHub organization that call the
+# fair-publish reusable workflow will inherit these rules.
+
+rules:
+  - name: Creator ORCID present
+    severity: error           # raise to blocking (default: warning)
+
+  - name: Version string present
+    severity: error
+
+  - name: License present and recognized
+    severity: error
+
+  - name: At least one keyword
+    severity: error           # raise to blocking (default: warning)
+
+  - name: Description length
+    severity: warning
+    config:
+      min_chars: 150          # institution requires richer descriptions
+
+  - name: Access rights stated
+    severity: error
+
+# Domain-specific rules (optional).
+# Uncomment and point to your own rule module.
+#
+# extra_rules:
+#   - module: myorg_rules.biomedical
+#     class: SnomedCtKeyword
+#     severity: error
+#   - module: myorg_rules.biomedical
+#     class: PatientDataStatement
+#     severity: error
+
+targets:
+  - zenodo

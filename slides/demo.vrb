@@ -1,0 +1,18 @@
+\frametitle{Validation report in GHA}
+The step summary written to the GitHub Actions UI after each push:
+
+  \vspace{0.3cm}
+  \begin{lstlisting}[style=yaml]
+## FAIR Validation Report
+✅ PASSED — 0 errors, 1 warning
+
+### Dataset: Metabolic biomarker dataset — cohort wave 1-5
+| Rule                          | FAIR       | Status | Message              |
+|-------------------------------|------------|--------|----------------------|
+| Creator ORCID present         | F1, A1     |   ✓    | OK                   |
+| License present and recognized| R1.1       |   ✓    | OK                   |
+| At least one keyword          | F2         |   ✓    | OK                   |
+| Description length            | F2, R1     |   ⚠    | 198 chars; min 150   |
+| Access rights stated          | A1         |   ✓    | OK                   |
+| Dataset identifier present    | F1         |   ✓    | OK                   |
+  \end{lstlisting}

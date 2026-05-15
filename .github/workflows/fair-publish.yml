@@ -1,0 +1,155 @@
+# Reusable FAIR metadata publishing workflow.
+#
+# Triggered by a GitHub release event.  Pre-release validation is handled
+# by fair-validate.yml (runs on push/PR); this workflow trusts that gate
+# and goes straight to deployment.
+#
+# After successful publishing it:
+#   - Commits the updated zenodo_state.json back to the repository.
+#   - Creates a lightweight git tag reflecting the publication status:
+#       published/<release-tag>          e.g. published/v1.2.0
+#     This makes the dataset's publication history visible in the git log
+#     and queryable via the GitHub API without reading Zenodo directly.
+#
+# Institutions host this file in their org-level .github repository.
+# Project repositories call it on release:
+#
+#   on:
+#     release:
+#       types: [published]
+#   jobs:
+#     publish:
+#       uses: MY-ORG/.github/.github/workflows/fair-publish.yml@v1
+#       with:
+#         dmp_path: dmp.json
+#       secrets:
+#         zenodo_token: ${{ secrets.ZENODO_TOKEN }}
+
+on:
+  workflow_call:
+    inputs:
+      dmp_path:
+        description: "Path to the maDMP JSON file."
+        required: true
+        type: string
+      policy_path:
+        description: "Institution policy YAML."
+        required: false
+        type: string
+        default: ".github/policies/fair-policy.yml"
+      state_path:
+        description: "Zenodo state file (created automatically on first run)."
+        required: false
+        type: string
+        default: "zenodo_state.json"
+      sandbox:
+        description: "Use Zenodo sandbox instead of production."
+        required: false
+        type: boolean
+        default: false
+      fair_publish_version:
+        description: "PyPI version of fair-publish to install."
+        required: false
+        type: string
+        default: "latest"
+    secrets:
+      zenodo_token:
+        description: "Zenodo personal access token (stored as org secret)."
+        required: true
+    outputs:
+      published_dois:
+        description: "JSON object mapping dataset_id to concept DOI."
+        value: ${{ jobs.publish.outputs.published_dois }}
+      status_tag:
+        description: "Git tag created to mark publication status."
+        value: ${{ jobs.publish.outputs.status_tag }}
+
+jobs:
+  publish:
+    name: Publish datasets to Zenodo
+    runs-on: ubuntu-latest
+    outputs:
+      published_dois: ${{ steps.publish.outputs.published_dois }}
+      status_tag: ${{ steps.tag.outputs.status_tag }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0          # needed to push tags
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install fair-publish
+        run: |
+          VER="${{ inputs.fair_publish_version }}"
+          pip install ${VER:+fair-publish==$VER} ${VER:-fair-publish}
+
+      - name: Publish datasets
+        id: publish
+        env:
+          ZENODO_TOKEN: ${{ secrets.zenodo_token }}
+        run: |
+          POLICY=""
+          [ -f "${{ inputs.policy_path }}" ] && POLICY="--policy ${{ inputs.policy_path }}"
+          SANDBOX=""
+          [ "${{ inputs.sandbox }}" = "true" ] && SANDBOX="--sandbox"
+
+          OUTPUT=$(fair-publish publish "${{ inputs.dmp_path }}" \
+            $POLICY $SANDBOX \
+            --state "${{ inputs.state_path }}" \
+            --release-tag "${{ github.ref_name }}" \
+            --format json)
+
+          echo "$OUTPUT"
+          DOIS=$(echo "$OUTPUT" | python3 -c \
+            'import json,sys; r=json.load(sys.stdin); print(json.dumps(r.get("published",{})))')
+          echo "published_dois=$DOIS" >> "$GITHUB_OUTPUT"
+
+      - name: Commit updated state file
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${{ inputs.state_path }}"
+          git diff --cached --quiet || \
+            git commit -m "chore: update zenodo_state.json after ${{ github.ref_name }}"
+          git push
+
+      # ── Publication status tag ────────────────────────────────────────────
+      # Creates a lightweight tag  published/<release-tag>  so that the
+      # publication history is visible in the git log and queryable via the
+      # GitHub API (GET /repos/{owner}/{repo}/git/refs/tags/published/).
+      # The tag message carries the concept DOIs for quick inspection.
+      - name: Create publication status tag
+        id: tag
+        run: |
+          STATUS_TAG="published/${{ github.ref_name }}"
+          DOIS='${{ steps.publish.outputs.published_dois }}'
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$STATUS_TAG" -m "Published ${{ github.ref_name }} to Zenodo
+          DOIs: $DOIS"
+          git push origin "$STATUS_TAG"
+
+          echo "status_tag=$STATUS_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Write step summary
+        run: |
+          echo "## Published to Zenodo" >> "$GITHUB_STEP_SUMMARY"
+          echo "Release: \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Status tag: \`${{ steps.tag.outputs.status_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '${{ steps.publish.outputs.published_dois }}' \
+          | python3 -c "
+          import json, sys
+          dois = json.load(sys.stdin)
+          print('| Dataset ID | Concept DOI |')
+          print('|------------|-------------|')
+          for k, v in dois.items():
+              print(f'| {k} | {v} |')
+          " >> "$GITHUB_STEP_SUMMARY"

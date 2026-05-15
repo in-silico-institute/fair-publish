@@ -1,0 +1,53 @@
+{
+  "dmp": {
+    "title": "Longitudinal cohort study of metabolic biomarkers",
+    "description": "Anonymised measurements of 12 metabolic markers across 400 participants over 5 years.",
+    "created": "2025-01-15",
+    "modified": "2025-06-01",
+    "dmp_id": {
+      "identifier": "https://doi.org/10.5281/zenodo.99999",
+      "type": "doi"
+    },
+    "contact": {
+      "name": "García, Elena",
+      "mbox": "elena.garcia@uah.es",
+      "contact_id": {
+        "identifier": "https://orcid.org/0000-0001-6752-9599",
+        "type": "orcid"
+      }
+    },
+    "contributor": [
+      {
+        "name": "Sicilia, Miguel-Angel",
+        "role": ["ProjectLeader"],
+        "contributor_id": {
+          "identifier": "https://orcid.org/0000-0003-3067-4180",
+          "type": "orcid"
+        }
+      }
+    ],
+    "dataset": [
+      {
+        "title": "Metabolic biomarker dataset — cohort wave 1–5",
+        "description": "Anonymised longitudinal measurements of 12 metabolic biomarkers (glucose, insulin, HbA1c, cholesterol fractions, triglycerides, CRP, BMI, blood pressure) collected at annual intervals for 400 adult participants recruited from primary care in Spain. All values are normalised and participant IDs are pseudonymised.",
+        "version": "1.0.0",
+        "keyword": ["metabolic biomarkers", "longitudinal cohort", "anonymised", "open data"],
+        "personal_data": "no",
+        "sensitive_data": "no",
+        "distribution": [
+          {
+            "title": "CSV release",
+            "format": "text/csv",
+            "data_access": "open",
+            "license": [
+              {
+                "license_ref": "https://creativecommons.org/licenses/by/4.0/",
+                "start_date": "2025-06-01"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
