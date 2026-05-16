@@ -52,6 +52,7 @@ from .rules import Rule, DEFAULT_RULES, DescriptionLength
 class PolicyConfig:
     rules: list[Rule]
     targets: list[str] = field(default_factory=lambda: ["zenodo"])
+    version: str = "unversioned"
 
 
 def _load_builtin(name: str, severity: str, config: dict) -> Rule | None:
@@ -117,4 +118,5 @@ def load(policy_path: Path) -> PolicyConfig:
     return PolicyConfig(
         rules=rules,
         targets=data.get("targets", ["zenodo"]),
+        version=str(data.get("version", "unversioned")),
     )

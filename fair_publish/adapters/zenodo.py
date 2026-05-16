@@ -212,22 +212,25 @@ class ZenodoAdapter:
                            .get("doi", ""))
         return {"id": str(new_id), "doi": prereserved_doi}
 
-    def publish_dmp(self, dmp: Any, state: dict[str, str],
-                    version_tag: str) -> dict[str, str]:
+    def publish_dmp(self, dmp: Any, state: dict[str, dict],
+                    version_tag: str,
+                    policy_version: str = "unversioned") -> dict[str, dict]:
         """
         Create Zenodo draft depositions for every dataset in the DMP.
 
         For each dataset:
-          - If its dataset_id is in `state` (stored as a deposition record ID),
-            create a new draft version of that record.
+          - If its dataset_id is in `state`, create a new draft version.
           - Otherwise, create a new draft deposition.
 
         Records are left unpublished; a curator must publish them on Zenodo
         to register the DOI and make the record publicly accessible.
 
-        Returns an updated state dict (dataset_id → deposition record ID).
+        Returns an updated state dict where each entry records both the
+        Zenodo deposition record ID and the policy version used, so that
+        records published under older policies can be identified after
+        a policy update.
         """
-        from ..state import dataset_key
+        from ..state import dataset_key, record_id as get_record_id
 
         updated_state = dict(state)
 
@@ -236,16 +239,17 @@ class ZenodoAdapter:
             metadata = _dataset_to_zenodo_metadata(dmp, dataset, version_tag)
 
             if key in state:
-                result = self._new_version_draft(state[key], metadata)
+                result = self._new_version_draft(get_record_id(state[key]), metadata)
                 action = "new draft version"
             else:
                 result = self._create_draft(metadata)
                 action = "draft created"
 
-            record_id = result["id"]
+            dep_id = result["id"]
             doi = result.get("doi", "(reserved after publish)")
-            updated_state[key] = record_id
-            print(f"  [{action}] {metadata['title']} → id={record_id} doi={doi}",
+            updated_state[key] = {"record_id": dep_id, "policy_version": policy_version}
+            print(f"  [{action}] {metadata['title']} → id={dep_id} doi={doi} "
+                  f"policy={policy_version}",
                   file=sys.stderr)
 
         return updated_state

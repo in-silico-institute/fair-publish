@@ -94,6 +94,7 @@ def publish(dmp: Path, policy: Path, state_path: Path,
     import json as _json
 
     # --- Validate first ---
+    policy_cfg = load_policy(policy)
     report_obj = validate_file(dmp, policy)
     if fmt == "text":
         click.echo(report_obj.summary())
@@ -117,7 +118,10 @@ def publish(dmp: Path, policy: Path, state_path: Path,
     from .adapters.zenodo import ZenodoAdapter
     adapter = ZenodoAdapter(sandbox=sandbox)
     version_tag = release_tag or "1.0.0"
-    updated_state = adapter.publish_dmp(dmp_obj, state, version_tag)
+    updated_state = adapter.publish_dmp(
+        dmp_obj, state, version_tag,
+        policy_version=policy_cfg.version,
+    )
 
     # --- Persist state ---
     save_state(repo_root, updated_state)
@@ -132,9 +136,10 @@ def publish(dmp: Path, policy: Path, state_path: Path,
         click.echo(_json.dumps(result, indent=2))
     else:
         click.echo(f"\nPublished {len(updated_state)} dataset(s).")
-        for k, v in updated_state.items():
+        for k, entry in updated_state.items():
             action = "new" if k in new_entries else "updated"
-            click.echo(f"  [{action}] {k} → {v}")
+            click.echo(f"  [{action}] {k} → record={entry['record_id']} "
+                       f"policy={entry['policy_version']}")
 
 
 def main():
