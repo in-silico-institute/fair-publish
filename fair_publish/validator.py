@@ -107,20 +107,36 @@ class ValidationReport:
 # Validation functions
 # ---------------------------------------------------------------------------
 
-def _load_dmp(dmp_path: Path):
-    """Load and structurally validate a maDMP via madmpy."""
-    # madmpy prints progress lines to stdout; redirect them to stderr so they
-    # don't corrupt JSON output when the caller pipes our stdout.
+def check_schema(dmp_path: Path) -> None:
+    """Validate a maDMP against the RDA maDMP Common Standard schema.
+
+    Raises an exception if the document is structurally invalid.
+    This is intentionally separate from policy checking so it can be
+    surfaced as a distinct step in CI pipelines.
+    """
     with contextlib.redirect_stdout(sys.stderr):
-        madmpy.validate_DMP(str(dmp_path))      # raises on schema error
+        madmpy.validate_DMP(str(dmp_path))
+
+
+def _load_dmp(dmp_path: Path, *, skip_schema: bool = False):
+    """Parse a maDMP into a madmpy DMP object.
+
+    If skip_schema is False (default) the RDA schema is validated first via
+    madmpy.validate_DMP; pass skip_schema=True when the schema step has
+    already been run as a separate pipeline step.
+    """
+    with contextlib.redirect_stdout(sys.stderr):
+        if not skip_schema:
+            madmpy.validate_DMP(str(dmp_path))
         dmp_module = madmpy.load()
     with dmp_path.open() as f:
         data = json.load(f)
     return dmp_module.DMP(**data["dmp"])
 
 
-def validate(dmp_path: Path, policy: PolicyConfig) -> ValidationReport:
-    dmp = _load_dmp(dmp_path)
+def validate(dmp_path: Path, policy: PolicyConfig,
+             *, skip_schema: bool = False) -> ValidationReport:
+    dmp = _load_dmp(dmp_path, skip_schema=skip_schema)
     report = ValidationReport(dmp_title=getattr(dmp, "title", str(dmp_path)))
 
     datasets = getattr(dmp, "dataset", None) or []
@@ -137,6 +153,7 @@ def validate(dmp_path: Path, policy: PolicyConfig) -> ValidationReport:
     return report
 
 
-def validate_file(dmp_path: Path, policy_path: Path) -> ValidationReport:
+def validate_file(dmp_path: Path, policy_path: Path,
+                  *, skip_schema: bool = False) -> ValidationReport:
     policy = load_policy(policy_path)
-    return validate(dmp_path, policy)
+    return validate(dmp_path, policy, skip_schema=skip_schema)

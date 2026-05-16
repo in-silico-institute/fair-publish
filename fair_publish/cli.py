@@ -14,7 +14,7 @@ from pathlib import Path
 
 import click
 
-from .validator import validate_file
+from .validator import validate_file, check_schema
 from .policy import load as load_policy
 
 
@@ -23,15 +23,35 @@ def cli():
     """Policy-enforced FAIR metadata validation and Zenodo publishing."""
 
 
+# ── schema-check ──────────────────────────────────────────────────────────
+
+@cli.command("schema-check")
+@click.argument("dmp", type=click.Path(exists=True, path_type=Path))
+def schema_check(dmp: Path):
+    """Check maDMP structural validity against the RDA maDMP Common Standard.
+
+    Exits 0 if the document is schema-valid, 1 otherwise.
+    Run this as a first CI step before policy checking.
+    """
+    try:
+        check_schema(dmp)
+        click.echo(f"Schema valid: {dmp}")
+    except Exception as exc:
+        click.echo(f"Schema error: {exc}", err=True)
+        sys.exit(1)
+
+
 # ── validate ──────────────────────────────────────────────────────────────
 
 @cli.command()
 @click.argument("dmp", type=click.Path(exists=True, path_type=Path))
 @click.option("--policy", default="policy.yml", show_default=True,
               type=click.Path(path_type=Path))
-def validate(dmp: Path, policy: Path):
-    """Validate maDMP against policy. Exit 1 if any error-level rule fails."""
-    report = validate_file(dmp, policy)
+@click.option("--skip-schema", is_flag=True, default=False,
+              help="Skip RDA schema check (use when schema-check ran as a prior step).")
+def validate(dmp: Path, policy: Path, skip_schema: bool):
+    """Validate maDMP against institutional policy. Exit 1 if any error-level rule fails."""
+    report = validate_file(dmp, policy, skip_schema=skip_schema)
     click.echo(report.summary())
     sys.exit(0 if report.passed else 1)
 
@@ -44,9 +64,11 @@ def validate(dmp: Path, policy: Path):
               type=click.Path(path_type=Path))
 @click.option("--format", "fmt", default="text",
               type=click.Choice(["text", "json"]), show_default=True)
-def report(dmp: Path, policy: Path, fmt: str):
+@click.option("--skip-schema", is_flag=True, default=False,
+              help="Skip RDA schema check (use when schema-check ran as a prior step).")
+def report(dmp: Path, policy: Path, fmt: str, skip_schema: bool):
     """Print validation report without publishing."""
-    r = validate_file(dmp, policy)
+    r = validate_file(dmp, policy, skip_schema=skip_schema)
     click.echo(json.dumps(r.to_dict(), indent=2) if fmt == "json" else r.summary())
     sys.exit(0 if r.passed else 1)
 
